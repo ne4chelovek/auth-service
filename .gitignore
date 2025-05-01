@@ -1,0 +1,6 @@
+/.env
+/certs/
+/vendor.protogen/
+/.vscode/
+/bin/
+*.exe

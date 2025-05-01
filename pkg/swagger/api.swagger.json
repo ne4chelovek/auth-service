@@ -1,0 +1,289 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Auth API",
+    "version": "0.1.0",
+    "contact": {
+      "name": "Mikhail Savchuk",
+      "email": "mikhaildisav@gmail.com"
+    }
+  },
+  "tags": [
+    {
+      "name": "UsersV1"
+    }
+  ],
+  "host": "localhost:8000",
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/auth_v1/v1": {
+      "get": {
+        "operationId": "UsersV1_Get",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/users_v1GetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "UsersV1"
+        ]
+      },
+      "delete": {
+        "operationId": "UsersV1_Delete",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "UsersV1"
+        ]
+      },
+      "patch": {
+        "operationId": "UsersV1_Update",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/users_v1UpdateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UsersV1"
+        ]
+      }
+    },
+    "/auth_v1/v1/create": {
+      "post": {
+        "summary": "Создаёт нового пользователя",
+        "operationId": "UsersV1_Create",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/users_v1CreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/users_v1CreateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "UsersV1"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "users_v1CreateRequest": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "$ref": "#/definitions/users_v1CreateUser"
+        }
+      }
+    },
+    "users_v1CreateResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "users_v1CreateUser": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Имя пользователя"
+        },
+        "email": {
+          "type": "string",
+          "title": "Email пользователя"
+        },
+        "password": {
+          "type": "string",
+          "title": "Пароль пользователя"
+        },
+        "passwordConfirm": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/definitions/users_v1Role",
+          "title": "Роль пользователя"
+        }
+      }
+    },
+    "users_v1GetResponse": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "$ref": "#/definitions/users_v1User"
+        }
+      }
+    },
+    "users_v1Role": {
+      "type": "string",
+      "enum": [
+        "user",
+        "admin"
+      ],
+      "default": "user"
+    },
+    "users_v1UpdateRequest": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "$ref": "#/definitions/users_v1UpdateUser"
+        }
+      }
+    },
+    "users_v1UpdateUser": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      }
+    },
+    "users_v1User": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/definitions/users_v1Role"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
