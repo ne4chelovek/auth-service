@@ -5,9 +5,10 @@ go 1.23.0
 toolchain go1.24.0
 
 require (
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/confluentinc/confluent-kafka-go/v2 v2.10.1
 	github.com/envoyproxy/protoc-gen-validate v1.2.1
 	github.com/gojuno/minimock/v3 v3.4.5
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645
@@ -15,6 +16,7 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rakyll/statik v0.1.7
+	github.com/redis/go-redis/v9 v9.11.0
 	github.com/sony/gobreaker v1.0.0
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	go.uber.org/zap v1.27.0
@@ -29,6 +31,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

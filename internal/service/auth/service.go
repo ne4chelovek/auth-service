@@ -2,6 +2,8 @@ package auth
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/ne4chelovek/auth-service/internal/cache"
+	k "github.com/ne4chelovek/auth-service/internal/kafkaProducer"
 	"github.com/ne4chelovek/auth-service/internal/repository"
 	"time"
 )
@@ -15,10 +17,11 @@ const (
 
 type serv struct {
 	userRepository repository.UsersRepository
-
-	dbPool *pgxpool.Pool
+	dbPool         *pgxpool.Pool
+	blackList      cache.BlackListRepository
+	kafka          *k.Producer
 }
 
-func NewAuthService(userRepository repository.UsersRepository, dbPool *pgxpool.Pool) *serv {
-	return &serv{userRepository: userRepository, dbPool: dbPool}
+func NewAuthService(userRepository repository.UsersRepository, dbPool *pgxpool.Pool, blackList cache.BlackListRepository, kafka *k.Producer) *serv {
+	return &serv{userRepository: userRepository, dbPool: dbPool, blackList: blackList, kafka: kafka}
 }

@@ -31,7 +31,7 @@ func main() {
 }
 
 func runGRPCServer(s *server.Servers, errChan chan<- error) {
-	log.Printf("Starting gRPC server on %s", s.Listener.Addr())
+	logger.Info("Starting gRPC server on ", zap.String("address", s.Listener.Addr().String()))
 	if err := s.GRPC.Serve(s.Listener); err != nil {
 		errChan <- fmt.Errorf("gRPC server error: %w", err)
 	}

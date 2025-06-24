@@ -1,14 +1,20 @@
 package setupservers
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	grpcMiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/natefinch/lumberjack"
 	"github.com/ne4chelovek/auth-service/internal/api/access"
 	"github.com/ne4chelovek/auth-service/internal/api/auth"
 	"github.com/ne4chelovek/auth-service/internal/api/users"
+	"github.com/ne4chelovek/auth-service/internal/cache/blackList"
 	"github.com/ne4chelovek/auth-service/internal/interceptor"
+	k "github.com/ne4chelovek/auth-service/internal/kafkaProducer"
 	"github.com/ne4chelovek/auth-service/internal/logger"
 	"github.com/ne4chelovek/auth-service/internal/metrics"
 	accessRepository "github.com/ne4chelovek/auth-service/internal/repository/access"
@@ -22,46 +28,49 @@ import (
 	descAccess "github.com/ne4chelovek/auth-service/pkg/access_v1"
 	descAuth "github.com/ne4chelovek/auth-service/pkg/auth_v1"
 	descUsers "github.com/ne4chelovek/auth-service/pkg/users_v1"
+	_ "github.com/ne4chelovek/auth-service/statik"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rakyll/statik/fs"
+	"github.com/redis/go-redis/v9"
 	"github.com/sony/gobreaker"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"log"
-	"os"
-	"time"
-
-	"context"
-	"fmt"
+	"google.golang.org/grpc/reflection"
 	"io"
+	"log"
 	"net"
 	"net/http"
-
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rakyll/statik/fs"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-
-	_ "github.com/ne4chelovek/auth-service/statik"
+	"os"
+	"time"
 )
 
 var logLevel = flag.String("1", "info", "log level")
 
+var kafkaAddresses = []string{
+	"localhost:9091", // Для доступа с хоста
+	"localhost:9092",
+	"localhost:9093",
+}
+
 const (
-	dbDSN       = "host=localhost port=5434 dbname=auth user=auth-user password=auth-password sslmode=disable"
-	grpcPort    = 9000
-	httpPort    = 8000
-	swaggerPort = 8005
-	grpcAddress = "localhost:9000"
-	serviceName = "test-service"
+	dbDSN        = "host=localhost port=5434 dbname=auth user=auth-user password=auth-password sslmode=disable"
+	grpcPort     = 9000
+	httpPort     = 8000
+	swaggerPort  = 8005
+	grpcAddress  = "localhost:9000"
+	serviceName  = "test-service"
+	redisAddress = "localhost:6379"
 )
 
 type Servers struct {
 	GRPC          *grpc.Server
 	HTTP          *http.Server
 	Swagger       *http.Server
+	Kafka         *k.Producer
+	Redis         *redis.Client
 	Prometheus    *http.Server
 	TracingClient *grpc.ClientConn
 	DB            *pgxpool.Pool
@@ -79,9 +88,19 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 		return nil, err
 	}
 
+	kafkaProducer, err := kafkaProducer()
+	if err != nil {
+		logger.Info("failed to create kafka producer", zap.Error(err))
+	}
+
+	redisConn, err := newRedisClient(ctx)
+	if err != nil {
+		logger.Info("failed to create redis client", zap.Error(err))
+	}
+
 	//Создание слоёв приложения
 	usersSrv := createUsersService(pool)
-	authSrv := createAuthService(pool)
+	authSrv := createAuthService(ctx, pool, kafkaProducer, redisConn)
 	accessSrv := createAccessService(pool)
 
 	//Инициализация gRPC сервера
@@ -127,6 +146,8 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 			Addr:    fmt.Sprintf(":%d", swaggerPort),
 			Handler: swaggerHandler,
 		},
+		Kafka: kafkaProducer,
+		Redis: redisConn,
 		Prometheus: &http.Server{
 			Addr:        "localhost:2112",
 			Handler:     prometheusHandler,
@@ -136,6 +157,14 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 		DB:            pool,
 		Listener:      lis,
 	}, nil
+}
+
+func kafkaProducer() (*k.Producer, error) {
+	producer, err := k.NewProducer(kafkaAddresses)
+	if err != nil {
+		logger.Fatal("failed to create kafka producer: %w", zap.Error(err))
+	}
+	return producer, nil
 }
 
 // initDB инициализирует подключение к PostgreSQL через пул соединений.
@@ -160,6 +189,21 @@ func initDB(ctx context.Context) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+func newRedisClient(ctx context.Context) (*redis.Client, error) {
+	client := redis.NewClient(&redis.Options{
+		Addr:     redisAddress,
+		Password: "",
+		DB:       0,
+	})
+
+	// Проверяем подключение
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+	}
+
+	return client, nil
+}
+
 func createUsersService(pool *pgxpool.Pool) service.UsersService {
 	return usersService.NewUsersService(
 		usersRepository.NewRepository(pool),
@@ -168,10 +212,12 @@ func createUsersService(pool *pgxpool.Pool) service.UsersService {
 	)
 }
 
-func createAuthService(pool *pgxpool.Pool) service.AuthService {
+func createAuthService(ctx context.Context, pool *pgxpool.Pool, kafkaProducer *k.Producer, redisConn *redis.Client) service.AuthService {
 	return authService.NewAuthService(
 		usersRepository.NewRepository(pool),
 		pool,
+		blackList.NewBlackList(redisConn),
+		kafkaProducer,
 	)
 }
 

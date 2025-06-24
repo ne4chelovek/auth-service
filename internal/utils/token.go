@@ -2,15 +2,15 @@ package utils
 
 import (
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
+	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/ne4chelovek/auth-service/internal/model"
 	"time"
 )
 
 func GenerateToken(info model.UserInfo, secretKey []byte, duration time.Duration) (string, error) {
 	claims := model.UserClaims{
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(duration).Unix(),
+		jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 		},
 		info.Username,
 		info.Role,
@@ -33,7 +33,7 @@ func VerifyToken(tokenStr string, secretKey []byte) (*model.UserClaims, error) {
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %s", err.Error())
+		return nil, fmt.Errorf("invalid token: %w", err)
 	}
 	claims, ok := token.Claims.(*model.UserClaims)
 	if !ok {

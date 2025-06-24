@@ -15,6 +15,7 @@ type UsersService interface {
 
 type AuthService interface {
 	Login(ctx context.Context, username, password string) (string, error)
+	Logout(ctx context.Context, refreshToken string) error
 	GetRefreshToken(ctx context.Context, oldRefreshToken string) (string, error)
 	GetAccessToken(ctx context.Context, accessToken string) (string, error)
 }

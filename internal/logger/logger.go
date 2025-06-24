@@ -26,3 +26,7 @@ func Error(msg string, fields ...zap.Field) {
 func Fatal(msg string, fields ...zap.Field) {
 	globalLogger.Fatal(msg, fields...)
 }
+
+func Debug(msg string, fields ...zap.Field) {
+	globalLogger.Debug(msg, fields...)
+}

@@ -2,10 +2,13 @@ syntax = "proto3";
 
 package auth_v1;
 
+import "google/protobuf/empty.proto";
+
 option go_package = "users-service/pkg/auth_v1;auth_v1";
 
 service AuthV1 {
   rpc Login(LoginRequest) returns(LoginResponse);
+  rpc Logout(LogoutRequest) returns(google.protobuf.Empty);
   rpc GetRefreshToken(GetRefreshTokenRequest) returns(GetRefreshTokenResponse);
   rpc GetAccessToken(GetAccessTokenRequest) returns(GetAccessTokenResponse);
 }
@@ -16,6 +19,10 @@ message LoginRequest {
 }
 
 message LoginResponse{
+  string refresh_token = 1;
+}
+
+message LogoutRequest{
   string refresh_token = 1;
 }
 
