@@ -8,13 +8,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func (s *serv) Login(ctx context.Context, login *model.UserCreds) (string, error) {
-	authInfo, err := s.userRepository.GetAuthInfo(ctx, login.UserNames)
+func (s *serv) Login(ctx context.Context, username, password string) (string, error) {
+	authInfo, err := s.userRepository.GetAuthInfo(ctx, username)
 	if err != nil {
 		return "", fmt.Errorf("User not found: %v", err)
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(authInfo.Password), []byte(login.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(authInfo.Password), []byte(password))
 	if err != nil {
 		return "", fmt.Errorf("Password incorrect: %v", err)
 	}

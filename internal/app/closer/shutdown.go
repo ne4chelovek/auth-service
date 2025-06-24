@@ -3,44 +3,49 @@ package closer
 import (
 	"context"
 	server "github.com/ne4chelovek/auth-service/internal/app"
-	"log"
+	"github.com/ne4chelovek/auth-service/internal/logger"
+	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 )
 
-func WaitForShutdown(ctx context.Context, cancel context.CancelFunc, errChan <-chan error, s *server.Servers) {
+func WaitForShutdown(ctx context.Context, errChan <-chan error, s *server.Servers) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case <-sigChan:
-		log.Println("Received shutdown signal")
+		logger.Info("Received shutdown signal")
 	case err := <-errChan:
-		log.Printf("Critical error: %v", err)
+		logger.Error("Critical error: ", zap.Error(err))
 	case <-ctx.Done():
+		logger.Info("Context cancelled")
 	}
 
 	// Graceful shutdown
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
-	// 1. Остановка gRPC сервера
-	log.Println("Stopping gRPC server...")
+	logger.Info("Stopping gRPC server...")
 	s.GRPC.GracefulStop()
-	// 2. Остановка HTTP Gateway
-	log.Println("Stopping HTTP server...")
+
+	logger.Info("Stopping HTTP server...")
 	if err := s.HTTP.Shutdown(shutdownCtx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
+		logger.Error("HTTP server shutdown error:", zap.Error(err))
 	}
-	// 3. Остановка Swagger UI
-	log.Println("Stopping Swagger UI...")
+
+	logger.Info("Stopping Swagger...")
 	if err := s.Swagger.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Swagger server shutdown error: %v", err)
+		logger.Error("HTTP server shutdown error:", zap.Error(err))
 	}
-	// 4. Закрытие соединения с БД
-	log.Println("Closing database connections...")
+
+	logger.Info("Stopping Prometheus...")
+	if err := s.Prometheus.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Prometheus shutdown error:", zap.Error(err))
+	}
+
+	logger.Info("Closing database connections...")
 	s.DB.Close()
-	cancel()
 }

@@ -10,14 +10,9 @@ service AuthV1 {
   rpc GetAccessToken(GetAccessTokenRequest) returns(GetAccessTokenResponse);
 }
 
-
-message Login {
+message LoginRequest {
   string usernames = 1;
   string password = 2;
-}
-
-message LoginRequest {
-  Login login = 1;
 }
 
 message LoginResponse{

@@ -3,9 +3,8 @@ package users
 import (
 	"context"
 	"fmt"
-	"github.com/ne4chelovek/auth-service/internal/model"
-
 	"github.com/jackc/pgx/v5"
+	"github.com/ne4chelovek/auth-service/internal/model"
 )
 
 func (s *serv) Get(ctx context.Context, Id int64) (*model.User, error) {
@@ -13,16 +12,18 @@ func (s *serv) Get(ctx context.Context, Id int64) (*model.User, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
 
-	txRepo := s.usersRepository.WithTx(tx)
-	txLog := s.logRepository.WithTx(tx)
-
-	user, err := txRepo.Get(ctx, Id)
+	user, err := s.usersRepository.WithTx(tx).Get(ctx, Id)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := txLog.Log(ctx, fmt.Sprintf("get user with id: %v", Id)); err != nil {
+	if err := s.logRepository.WithTx(tx).Log(ctx, fmt.Sprintf("get user with id: %v", Id)); err != nil {
 		return nil, err
 	}
 

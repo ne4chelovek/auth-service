@@ -1,10 +1,16 @@
 package setupservers
 
 import (
+	"flag"
+	grpcMiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	"github.com/natefinch/lumberjack"
 	"github.com/ne4chelovek/auth-service/internal/api/access"
 	"github.com/ne4chelovek/auth-service/internal/api/auth"
 	"github.com/ne4chelovek/auth-service/internal/api/users"
 	"github.com/ne4chelovek/auth-service/internal/interceptor"
+	"github.com/ne4chelovek/auth-service/internal/logger"
+	"github.com/ne4chelovek/auth-service/internal/metrics"
 	accessRepository "github.com/ne4chelovek/auth-service/internal/repository/access"
 	logRepository "github.com/ne4chelovek/auth-service/internal/repository/log"
 	usersRepository "github.com/ne4chelovek/auth-service/internal/repository/users"
@@ -12,15 +18,23 @@ import (
 	accessService "github.com/ne4chelovek/auth-service/internal/service/access"
 	authService "github.com/ne4chelovek/auth-service/internal/service/auth"
 	usersService "github.com/ne4chelovek/auth-service/internal/service/users"
+	"github.com/ne4chelovek/auth-service/internal/tracing"
 	descAccess "github.com/ne4chelovek/auth-service/pkg/access_v1"
 	descAuth "github.com/ne4chelovek/auth-service/pkg/auth_v1"
 	descUsers "github.com/ne4chelovek/auth-service/pkg/users_v1"
+	"github.com/opentracing/opentracing-go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sony/gobreaker"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc/credentials/insecure"
+	"log"
+	"os"
+	"time"
 
 	"context"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"io"
-	"log"
 	"net"
 	"net/http"
 
@@ -33,27 +47,35 @@ import (
 	_ "github.com/ne4chelovek/auth-service/statik"
 )
 
+var logLevel = flag.String("1", "info", "log level")
+
 const (
-	dbDSN       = "host=localhost port=54322 dbname=auth user=auth-user password=auth-password sslmode=disable"
+	dbDSN       = "host=localhost port=5434 dbname=auth user=auth-user password=auth-password sslmode=disable"
 	grpcPort    = 9000
 	httpPort    = 8000
 	swaggerPort = 8005
 	grpcAddress = "localhost:9000"
+	serviceName = "test-service"
 )
 
 type Servers struct {
-	GRPC     *grpc.Server
-	HTTP     *http.Server
-	Swagger  *http.Server
-	DB       *pgxpool.Pool
-	Listener net.Listener
+	GRPC          *grpc.Server
+	HTTP          *http.Server
+	Swagger       *http.Server
+	Prometheus    *http.Server
+	TracingClient *grpc.ClientConn
+	DB            *pgxpool.Pool
+	Listener      net.Listener
 }
 
 func SetupServers(ctx context.Context) (*Servers, error) {
+	logger.Init(getCore(getAtomicLevel()))
+	tracing.Init(logger.Logger(), serviceName)
+
 	// Инициализация базы данных
 	pool, err := initDB(ctx)
 	if err != nil {
-		log.Printf("failed to connect to database: %v", err)
+		logger.Info("failed to connect to database: ", zap.Error(err))
 		return nil, err
 	}
 
@@ -65,23 +87,33 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 	//Инициализация gRPC сервера
 	grpcServer, lis, err := setupGRPCServer(usersSrv, authSrv, accessSrv)
 	if err != nil {
-		log.Printf("GRPC server setup failed: %v", err)
+		logger.Info("GRPC server setup failed: ", zap.Error(err))
 		return nil, err
 	}
 
 	//Иниацилизация HTTP Gateway
 	httpHandler, err := setupHttpGateway(ctx)
 	if err != nil {
-		log.Printf("HTTP gateWay setup failed: %v", err)
+		logger.Info("HTTP gateWay setup failed:", zap.Error(err))
 		return nil, err
 	}
 
 	//Инициализация Swagger UI
 	swaggerHandler, err := setupSwagger()
 	if err != nil {
-		pool.Close()
-		grpcServer.Stop()
-		log.Printf("Swagger UI setup failed")
+		logger.Info("Swagger UI setup failed")
+		return nil, err
+	}
+
+	prometheusHandler, err := setupPrometheus(ctx)
+	if err != nil {
+		logger.Info("Prometheus setup failed")
+		return nil, err
+	}
+
+	tracingClient, err := initTracing()
+	if err != nil {
+		logger.Info("tracing setup failed")
 		return nil, err
 	}
 
@@ -95,8 +127,14 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 			Addr:    fmt.Sprintf(":%d", swaggerPort),
 			Handler: swaggerHandler,
 		},
-		DB:       pool,
-		Listener: lis,
+		Prometheus: &http.Server{
+			Addr:        "localhost:2112",
+			Handler:     prometheusHandler,
+			ReadTimeout: 15 * time.Second,
+		},
+		TracingClient: tracingClient,
+		DB:            pool,
+		Listener:      lis,
 	}, nil
 }
 
@@ -109,14 +147,14 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 func initDB(ctx context.Context) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, dbDSN)
 	if err != nil {
-		log.Printf("failed to connect to database: %v", err)
-		return nil, fmt.Errorf("failed to create pool: %w", err)
+		logger.Info("failed to connect to database: %v", zap.Error(err))
+		return nil, err
 	}
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Printf("database ping failed: %v", err)
+		logger.Info("database ping failed:", zap.Error(err))
 		pool.Close()
-		return nil, fmt.Errorf("database connection failed: %w", err)
+		return nil, err
 	}
 
 	return pool, nil
@@ -144,25 +182,28 @@ func createAccessService(pool *pgxpool.Pool) service.AccessService {
 	)
 }
 
-// setupGRPCServer настраивает и запускает gRPC сервер:
-// 1. Слушает TCP-порт (grpcPort)
-// 2. Создает сервер с credentials и интерцептором валидации
-// 3. Регестрирует слои сервисов
 func setupGRPCServer(usersSrv service.UsersService, authSrv service.AuthService, accessToken service.AccessService) (*grpc.Server, net.Listener, error) {
-	creds, err := credentials.NewServerTLSFromFile("certs/service.pem", "certs/service.key")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create credentials: %w", err)
-	}
-
+	//creds, err := credentials.NewServerTLSFromFile("certs/service.pem", "certs/service.key")
+	//if err != nil {
+	//	return nil, nil, fmt.Errorf("failed to create credentials: %w", err)
+	//}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 	if err != nil {
-		log.Printf("failed to listen: %v", err)
+		logger.Info("failed to listen: ", zap.Error(err))
 		return nil, nil, err
 	}
 
 	server := grpc.NewServer(
-		grpc.Creds(creds),
-		grpc.UnaryInterceptor(interceptor.ValidateInterceptor),
+		grpc.Creds(insecure.NewCredentials()),
+		grpc.UnaryInterceptor(
+			grpcMiddleware.ChainUnaryServer(
+				interceptor.ValidateInterceptor,
+				interceptor.NewCircuitBreakerInterceptor(setupCircuitBreaker()).Unary,
+				interceptor.LogInterceptor,
+				interceptor.MetricsInterceptor,
+				interceptor.ServerTracingInterceptor,
+			),
+		),
 	)
 	reflection.Register(server)
 	descUsers.RegisterUsersV1Server(server, users.NewUsersImplementation(usersSrv))
@@ -174,37 +215,21 @@ func setupGRPCServer(usersSrv service.UsersService, authSrv service.AuthService,
 
 // setupHttpGateway создает HTTP-шлюз для gRPC сервиса (REST -> gRPC преобразование).
 func setupHttpGateway(ctx context.Context) (http.Handler, error) {
-	creds, err := credentials.NewClientTLSFromFile("certs/service.pem", "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create credentials transport: %w", err)
-	}
+	//creds, err := credentials.NewClientTLSFromFile("ce rts/service.pem", "")
+	//if err != nil {
+	//	return nil, fmt.Errorf("failed to create credentials transport: %w", err)
+	//}
 
 	opts := []grpc.DialOption{
-		grpc.WithTransportCredentials(creds),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 	mux := runtime.NewServeMux()
 	if err := descUsers.RegisterUsersV1HandlerFromEndpoint(ctx, mux, grpcAddress, opts); err != nil {
-		log.Printf("failed to register gateway: %v", err)
+		logger.Info("failed to register gateway: ", zap.Error(err))
 		return nil, err
 	}
 
 	return enableCORS(mux), nil
-}
-
-func enableCORS(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Grpc-Web")
-		w.Header().Set("Access-Control-Expose-Headers", "Grpc-Status, Grpc-Message")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		h.ServeHTTP(w, r)
-	})
 }
 
 // createSwaggerHandler создает файловый сервер для Swagger UI с особенностями:
@@ -228,8 +253,100 @@ func setupSwagger() (http.Handler, error) {
 		}
 		defer file.Close()
 		w.Header().Set("Content-Type", "application/json")
-		io.Copy(w, file)
+		_, err = io.Copy(w, file)
+		if err != nil {
+			logger.Error("failed copy file")
+		}
 	})
 
 	return mux, nil
+
+}
+
+func setupPrometheus(ctx context.Context) (http.Handler, error) {
+	err := metrics.Init(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+
+	return mux, nil
+}
+
+func enableCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Grpc-Web")
+		w.Header().Set("Access-Control-Expose-Headers", "Grpc-Status, Grpc-Message")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+func getCore(level zap.AtomicLevel) zapcore.Core {
+	stdout := zapcore.AddSync(os.Stdout)
+
+	file := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   "logs/app.log",
+		MaxSize:    10,
+		MaxBackups: 3,
+		MaxAge:     7,
+	})
+
+	productionCfg := zap.NewProductionEncoderConfig()
+	productionCfg.TimeKey = "timestamp"
+	productionCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	developmentCfg := zap.NewDevelopmentEncoderConfig()
+	developmentCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
+	consoleEncoder := zapcore.NewConsoleEncoder(developmentCfg)
+	fileEncoder := zapcore.NewJSONEncoder(productionCfg)
+
+	return zapcore.NewTee(
+		zapcore.NewCore(consoleEncoder, stdout, level),
+		zapcore.NewCore(fileEncoder, file, level),
+	)
+}
+
+func getAtomicLevel() zap.AtomicLevel {
+	var level zapcore.Level
+	if err := level.Set(*logLevel); err != nil {
+		log.Fatalf("failed to set log level: %v", err)
+	}
+	return zap.NewAtomicLevelAt(level)
+}
+
+func setupCircuitBreaker() *gobreaker.CircuitBreaker {
+	cb := gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name:        "auth_service",
+		MaxRequests: 3,
+		Timeout:     5 * time.Second,
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+			return failureRatio >= 0.6
+		},
+		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
+			log.Printf("Circuit Breaker: %s, changed from %v, to %v\n", name, from, to)
+		},
+	})
+	return cb
+}
+
+func initTracing() (*grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(grpcAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(opentracing.GlobalTracer())),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }

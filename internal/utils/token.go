@@ -13,7 +13,7 @@ func GenerateToken(info model.UserInfo, secretKey []byte, duration time.Duration
 			ExpiresAt: time.Now().Add(duration).Unix(),
 		},
 		info.Username,
-		info.Password,
+		info.Role,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 

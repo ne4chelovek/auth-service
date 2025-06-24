@@ -9,8 +9,7 @@ import (
 )
 
 const (
-	authMetadataHeader = "authorization"
-	authPrefix         = "Bearer "
+	authPrefix = "Bearer "
 )
 
 func (s *serv) Check(ctx context.Context, endpoint string) (bool, error) {
@@ -38,11 +37,13 @@ func (s *serv) Check(ctx context.Context, endpoint string) (bool, error) {
 		return false, fmt.Errorf("fail to get role endpoints")
 	}
 
+	vara := ""
 	for _, role := range allowedRoles {
+		vara = role
 		if role == claims.Role {
 			return true, nil
 		}
 	}
 
-	return false, fmt.Errorf("fail to check accessible role")
+	return false, fmt.Errorf("fail to check accessible role : %v, %v, %v", vara, claims.Role, endpoint)
 }
