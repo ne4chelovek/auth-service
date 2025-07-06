@@ -100,7 +100,7 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 
 	//Создание слоёв приложения
 	usersSrv := createUsersService(pool)
-	authSrv := createAuthService(ctx, pool, kafkaProducer, redisConn)
+	authSrv := createAuthService(pool, kafkaProducer, redisConn)
 	accessSrv := createAccessService(pool)
 
 	//Инициализация gRPC сервера
@@ -212,7 +212,7 @@ func createUsersService(pool *pgxpool.Pool) service.UsersService {
 	)
 }
 
-func createAuthService(ctx context.Context, pool *pgxpool.Pool, kafkaProducer *k.Producer, redisConn *redis.Client) service.AuthService {
+func createAuthService(pool *pgxpool.Pool, kafkaProducer *k.Producer, redisConn *redis.Client) service.AuthService {
 	return authService.NewAuthService(
 		usersRepository.NewRepository(pool),
 		pool,
