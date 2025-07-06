@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-func (s *serv) Logout(ctx context.Context, refreshToken string) error {
-	_, err := s.blackList.Get(ctx, refreshToken)
+func (s *serv) Logout(ctx context.Context, accessToken string) error {
+	_, err := s.blackList.Get(ctx, accessToken)
 	switch {
 	case err == nil:
 		return fmt.Errorf("logout: token already invalidated")
@@ -21,20 +21,20 @@ func (s *serv) Logout(ctx context.Context, refreshToken string) error {
 		return fmt.Errorf("logout: failed to check token: %w", err)
 	}
 
-	claims, err := utils.VerifyToken(refreshToken, []byte(refreshTokenSecretKeyName))
+	claims, err := utils.VerifyToken(accessToken, []byte(accessTokenSecretKeyName))
 	if err != nil {
 		return fmt.Errorf("logout: invalid refresh token")
 	}
 
 	remainingTTL := time.Until(claims.ExpiresAt.Time)
-	if err := s.blackList.BlackListToken(ctx, refreshToken, remainingTTL); err != nil {
+	if err := s.blackList.BlackListToken(ctx, accessToken, remainingTTL); err != nil {
 		return fmt.Errorf("logout: failed to black list")
 	}
 
 	event := map[string]interface{}{
 		"event_type": "user_logout",
 		"user_id":    claims.Username,
-		"session_id": refreshToken,
+		"session_id": accessToken,
 		"timestamp":  time.Now().Unix(),
 	}
 	eventBytes, err := json.Marshal(event)
