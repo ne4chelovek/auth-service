@@ -7,7 +7,7 @@ import (
 )
 
 func (i *impl) Logout(ctx context.Context, req *desc.LogoutRequest) (*emptypb.Empty, error) {
-	if err := i.authService.Logout(ctx, req.GetRefreshToken()); err != nil {
+	if err := i.authService.Logout(ctx, req.GetAccessToken()); err != nil {
 		return nil, err
 	}
 	return &emptypb.Empty{}, nil
