@@ -25,6 +25,7 @@ import (
 	authService "github.com/ne4chelovek/auth-service/internal/service/auth"
 	usersService "github.com/ne4chelovek/auth-service/internal/service/users"
 	"github.com/ne4chelovek/auth-service/internal/tracing"
+	"github.com/ne4chelovek/auth-service/internal/utils"
 	descAccess "github.com/ne4chelovek/auth-service/pkg/access_v1"
 	descAuth "github.com/ne4chelovek/auth-service/pkg/auth_v1"
 	descUsers "github.com/ne4chelovek/auth-service/pkg/users_v1"
@@ -98,10 +99,12 @@ func SetupServers(ctx context.Context) (*Servers, error) {
 		logger.Info("failed to create redis client", zap.Error(err))
 	}
 
+	tokenUtils := createTokenUtils(redisConn)
+
 	//Создание слоёв приложения
 	usersSrv := createUsersService(pool)
-	authSrv := createAuthService(pool, kafkaProducer, redisConn)
-	accessSrv := createAccessService(pool, redisConn)
+	authSrv := createAuthService(pool, kafkaProducer, redisConn, tokenUtils)
+	accessSrv := createAccessService(pool, redisConn, tokenUtils)
 
 	//Инициализация gRPC сервера
 	grpcServer, lis, err := setupGRPCServer(usersSrv, authSrv, accessSrv)
@@ -204,6 +207,10 @@ func newRedisClient(ctx context.Context) (*redis.Client, error) {
 	return client, nil
 }
 
+func createTokenUtils(redisConn *redis.Client) utils.TokenUtils {
+	return utils.NewTokenService(blackList.NewBlackList(redisConn))
+}
+
 func createUsersService(pool *pgxpool.Pool) service.UsersService {
 	return usersService.NewUsersService(
 		usersRepository.NewRepository(pool),
@@ -212,20 +219,22 @@ func createUsersService(pool *pgxpool.Pool) service.UsersService {
 	)
 }
 
-func createAuthService(pool *pgxpool.Pool, kafkaProducer *k.Producer, redisConn *redis.Client) service.AuthService {
+func createAuthService(pool *pgxpool.Pool, kafkaProducer *k.Producer, redisConn *redis.Client, tokenUtils utils.TokenUtils) service.AuthService {
 	return authService.NewAuthService(
 		usersRepository.NewRepository(pool),
 		pool,
 		blackList.NewBlackList(redisConn),
 		kafkaProducer,
+		tokenUtils,
 	)
 }
 
-func createAccessService(pool *pgxpool.Pool, redisConn *redis.Client) service.AccessService {
+func createAccessService(pool *pgxpool.Pool, redisConn *redis.Client, tokenUtils utils.TokenUtils) service.AccessService {
 	return accessService.NewAccessService(
 		accessRepository.NewAccessRepository(pool),
 		blackList.NewBlackList(redisConn),
 		pool,
+		tokenUtils,
 	)
 }
 

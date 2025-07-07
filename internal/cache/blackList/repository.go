@@ -11,7 +11,7 @@ type clientRedis struct {
 	redisClient *redis.Client
 }
 
-func NewBlackList(redisClient *redis.Client) cache.BlackListRepository {
+func NewBlackList(redisClient *redis.Client) cache.BlackList {
 	return &clientRedis{redisClient: redisClient}
 }
 

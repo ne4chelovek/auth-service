@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/ne4chelovek/auth-service/internal/model"
-	"github.com/ne4chelovek/auth-service/internal/utils"
 )
 
 func (s *serv) GetRefreshToken(ctx context.Context, oldRefreshToken string) (string, error) {
-	claims, err := utils.VerifyToken(oldRefreshToken, []byte(refreshTokenSecretKeyName))
+	claims, err := s.tokenUtils.VerifyToken(ctx, oldRefreshToken, []byte(refreshTokenSecretKeyName))
 	if err != nil {
 		return "", fmt.Errorf("Invalid refresh token: %v", err)
 	}
 
-	refreshToken, err := utils.GenerateToken(model.UserInfo{
+	refreshToken, err := s.tokenUtils.GenerateToken(model.UserInfo{
 		Username: claims.Username,
 		Role:     claims.Role,
 	},

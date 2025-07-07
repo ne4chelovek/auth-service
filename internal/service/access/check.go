@@ -2,10 +2,7 @@ package access
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/ne4chelovek/auth-service/internal/utils"
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/metadata"
 	"strings"
 )
@@ -30,15 +27,7 @@ func (s *serv) Check(ctx context.Context, endpoint string) (bool, error) {
 
 	accessToken := strings.TrimPrefix(authHeader[0], authPrefix)
 
-	_, err := s.blackList.Get(ctx, accessToken)
-	switch {
-	case err == nil:
-		return false, fmt.Errorf("token is invalidated")
-	case !errors.Is(err, redis.Nil):
-		return false, fmt.Errorf("failed to check token validity: %w", err)
-	}
-
-	claims, err := utils.VerifyToken(accessToken, []byte(accessTokenSecretKeyName))
+	claims, err := s.tokenUtils.VerifyToken(ctx, accessToken, []byte(accessTokenSecretKeyName))
 	if err != nil {
 		return false, fmt.Errorf("fail to verify access token")
 	}

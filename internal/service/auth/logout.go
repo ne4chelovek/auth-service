@@ -3,27 +3,16 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/ne4chelovek/auth-service/internal/logger"
-	"github.com/ne4chelovek/auth-service/internal/utils"
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"time"
 )
 
 func (s *serv) Logout(ctx context.Context, accessToken string) error {
-	_, err := s.blackList.Get(ctx, accessToken)
-	switch {
-	case err == nil:
-		return fmt.Errorf("logout: token already invalidated")
-	case !errors.Is(err, redis.Nil):
-		return fmt.Errorf("logout: failed to check token: %w", err)
-	}
-
-	claims, err := utils.VerifyToken(accessToken, []byte(accessTokenSecretKeyName))
+	claims, err := s.tokenUtils.VerifyToken(ctx, accessToken, []byte(accessTokenSecretKeyName))
 	if err != nil {
-		return fmt.Errorf("logout: invalid refresh token")
+		return fmt.Errorf("logout: invalid access token %v", err)
 	}
 
 	remainingTTL := time.Until(claims.ExpiresAt.Time)
@@ -37,6 +26,7 @@ func (s *serv) Logout(ctx context.Context, accessToken string) error {
 		"session_id": accessToken,
 		"timestamp":  time.Now().Unix(),
 	}
+
 	eventBytes, err := json.Marshal(event)
 	if err != nil {
 		logger.Error("Failed to marshal logout event",

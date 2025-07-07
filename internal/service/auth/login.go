@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/ne4chelovek/auth-service/internal/logger"
 	"github.com/ne4chelovek/auth-service/internal/model"
-	"github.com/ne4chelovek/auth-service/internal/utils"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"time"
@@ -23,7 +22,7 @@ func (s *serv) Login(ctx context.Context, username, password string) (string, er
 		return "", fmt.Errorf("password incorrect: %v", err)
 	}
 
-	refreshToken, err := utils.GenerateToken(model.UserInfo{
+	refreshToken, err := s.tokenUtils.GenerateToken(model.UserInfo{
 		Username: authInfo.Username,
 		Role:     authInfo.Role,
 	},
