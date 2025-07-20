@@ -5,3 +5,7 @@
 /bin/
 *.exe
 /logs/
+/prod.env
+/prod.docker-compose.yml
+/prodMigration.Dockerfile
+/prodMigration.sh

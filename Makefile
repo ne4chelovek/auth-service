@@ -61,16 +61,6 @@ generate-access-api:
 	--go-grpc_out=pkg/access_v1 --go-grpc_opt=paths=source_relative \
 	--plugin=protoc-gen-go-grpc=bin/protoc-gen-go-grpc.exe \
 	api/access_v1/access.proto
-
-gen-cert:
-	mkdir -p certs
-	openssl genrsa -out certs/ca.key 4096
-	openssl req -new -x509 -key certs/ca.key -sha256 -subj "//C=RU\ST=MOS\O=CA, Inc." -days 365 -out certs/ca.cert
-	openssl genrsa -out certs/service.key 4096
-	openssl req -new -key certs/service.key -out certs/service.csr -config openssl.cnf
-	openssl x509 -req -in certs/service.csr -CA certs/ca.cert -CAkey certs/ca.key -CAcreateserial \
-		-out certs/service.pem -days 365 -sha256 -extfile openssl.cnf -extensions req_ext
-
 	
 local-migration-status:
 	$(LOCAL_BIN)/goose -dir $(LOCAL_MIGRATION_DIR) postgres "$(LOCAL_MIGRATION_DSN)" status -v
@@ -138,3 +128,14 @@ error-test:
 		--total 3000 \
 		--insecure \
 		localhost:9000
+
+
+copy-to-server:
+	scp -r migrations root@87.228.39.226:~
+	scp -r prod.docker-compose.yml root@87.228.39.226:~
+	scp -r prodMigration.Dockerfile root@87.228.39.226:~
+	scp -r prodMigration.sh root@87.228.39.226:~
+	scp -r prod.env root@87.228.39.226:~
+	ssh root@87.228.39.226 "mv ~/prod.env ~/.env && chmod 600 ~/.env"
+	scp -r metrics root@87.228.39.226:~
+	scp -r certs root@87.228.39.226:~

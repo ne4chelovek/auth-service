@@ -38,6 +38,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"io"
@@ -57,7 +58,7 @@ var kafkaAddresses = []string{
 }
 
 const (
-	dbDSN        = "host=localhost port=5434 dbname=auth user=auth-user password=auth-password sslmode=disable"
+	dbDSN        = "host=pg-auth-1 port=5434 dbname=auth user=auth-user password=auth-password sslmode=disable"
 	grpcPort     = 9000
 	httpPort     = 8000
 	swaggerPort  = 8005
@@ -239,10 +240,10 @@ func createAccessService(pool *pgxpool.Pool, redisConn *redis.Client, tokenUtils
 }
 
 func setupGRPCServer(usersSrv service.UsersService, authSrv service.AuthService, accessToken service.AccessService) (*grpc.Server, net.Listener, error) {
-	//creds, err := credentials.NewServerTLSFromFile("certs/service.pem", "certs/service.key")
-	//if err != nil {
-	//	return nil, nil, fmt.Errorf("failed to create credentials: %w", err)
-	//}
+	creds, err := credentials.NewServerTLSFromFile("certs/service.pem", "certs/service.key")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create credentials: %w", err)
+	}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 	if err != nil {
 		logger.Info("failed to listen: ", zap.Error(err))
@@ -250,7 +251,7 @@ func setupGRPCServer(usersSrv service.UsersService, authSrv service.AuthService,
 	}
 
 	server := grpc.NewServer(
-		grpc.Creds(insecure.NewCredentials()),
+		grpc.Creds(creds),
 		grpc.UnaryInterceptor(
 			grpcMiddleware.ChainUnaryServer(
 				interceptor.ValidateInterceptor,
