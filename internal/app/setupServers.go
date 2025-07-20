@@ -52,7 +52,7 @@ import (
 var logLevel = flag.String("1", "info", "log level")
 
 var kafkaAddresses = []string{
-	"kafka1:9091",
+	"kafka1:29091",
 	//"localhost:9091", // Для доступа с хоста
 	//	"localhost:9092",
 	//	"localhost:9093",
