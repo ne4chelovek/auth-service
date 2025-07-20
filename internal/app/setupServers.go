@@ -58,7 +58,7 @@ var kafkaAddresses = []string{
 }
 
 const (
-	dbDSN        = "host=root-pg-auth-1 port=5434 dbname=auth user=auth-user password=auth-password sslmode=disable"
+	dbDSN        = "host=root-pg-auth-1 port=5432 dbname=auth user=auth-user password=auth-password sslmode=disable"
 	grpcPort     = 9000
 	httpPort     = 8000
 	swaggerPort  = 8005
