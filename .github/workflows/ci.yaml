@@ -63,8 +63,8 @@ jobs:
             # Remove old container...
             docker rm $CONTAINER_NAME
             
-            # Run a new container from a new image...
-            docker run -d -p 9000:9000 --name $CONTAINER_NAME --network root_default -t $REGISTRY/$IMAGE_NAME:$TAG_NAME
-            
             # Add Kafka network
             docker network connect root_kafka-net $CONTAINER_NAME
+            
+            # Run a new container from a new image...
+            docker run -d -p 9000:9000 --name $CONTAINER_NAME network root_default -t $REGISTRY/$IMAGE_NAME:$TAG_NAME
