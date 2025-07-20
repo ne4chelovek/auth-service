@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 RUN go mod download
-RUN CGO_ENABLED=1 GOOS=linux go build -o ./bin/mikle-chat cmd/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -o ./bin/mikle-auth cmd/main.go
 
 FROM debian:bullseye-slim
 
@@ -17,7 +17,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
-RUN mkdir -p certs
 COPY --from=builder /app/bin/mikle-auth .
 
 
