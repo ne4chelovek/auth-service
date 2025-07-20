@@ -52,9 +52,10 @@ import (
 var logLevel = flag.String("1", "info", "log level")
 
 var kafkaAddresses = []string{
-	"localhost:9091", // Для доступа с хоста
-	"localhost:9092",
-	"localhost:9093",
+	"kafka1:9091",
+	//"localhost:9091", // Для доступа с хоста
+	//	"localhost:9092",
+	//	"localhost:9093",
 }
 
 const (
@@ -64,7 +65,7 @@ const (
 	swaggerPort  = 8005
 	grpcAddress  = "localhost:9000"
 	serviceName  = "test-service"
-	redisAddress = "localhost:6379"
+	redisAddress = "redis:6379"
 )
 
 type Servers struct {
