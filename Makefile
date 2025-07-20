@@ -138,4 +138,3 @@ copy-to-server:
 	scp -r prod.env root@87.228.39.226:~
 	ssh root@87.228.39.226 "mv ~/prod.env ~/.env && chmod 600 ~/.env"
 	scp -r metrics root@87.228.39.226:~
-	scp -r certs root@87.228.39.226:~

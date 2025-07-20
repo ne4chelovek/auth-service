@@ -17,7 +17,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
+RUN mkdir -p certs
 COPY --from=builder /app/bin/mikle-auth .
+COPY certs/ ./certs/
 
 
 CMD ["./mikle-auth"]
