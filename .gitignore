@@ -9,3 +9,4 @@
 /prod.docker-compose.yml
 /prodMigration.Dockerfile
 /prodMigration.sh
+/coverage.out

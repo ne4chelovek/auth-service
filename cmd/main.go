@@ -8,7 +8,6 @@ import (
 	"github.com/ne4chelovek/auth-service/internal/app/closer"
 	"github.com/ne4chelovek/auth-service/internal/logger"
 	"go.uber.org/zap"
-	"log"
 	"net/http"
 )
 
@@ -38,21 +37,21 @@ func runGRPCServer(s *server.Servers, errChan chan<- error) {
 }
 
 func runHTTPServer(s *http.Server, errChan chan<- error) {
-	log.Printf("Starting HTTP server on %s", s.Addr)
+	logger.Info("Starting HTTP server on ", zap.String("address", s.Addr))
 	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		errChan <- fmt.Errorf("HTTP server error: %w", err)
 	}
 }
 
 func runSwaggerServer(s *http.Server, errChan chan<- error) {
-	log.Printf("Starting Swagger server on %s", s.Addr)
+	logger.Info("Starting Swagger server on ", zap.String("address", s.Addr))
 	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		errChan <- fmt.Errorf("swagger server error: %w", err)
 	}
 }
 
 func runPrometheusServer(s *http.Server, errChan chan<- error) {
-	log.Printf("Starting Prometheus server on %s", s.Addr)
+	logger.Info("Starting Prometheus server on ", zap.String("address", s.Addr))
 	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		errChan <- fmt.Errorf("prometheus server error: %w", err)
 	}

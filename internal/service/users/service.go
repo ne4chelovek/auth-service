@@ -13,6 +13,8 @@ type serv struct {
 	logRepository   repository.LogRepository
 }
 
+var _ service.UsersService = (*serv)(nil)
+
 func NewUsersService(usersRepository repository.UsersRepository, logRepository repository.LogRepository, dbPool *pgxpool.Pool) service.UsersService {
 	return &serv{
 		usersRepository: usersRepository,

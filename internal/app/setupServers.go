@@ -51,20 +51,20 @@ import (
 var logLevel = flag.String("1", "info", "log level")
 
 var kafkaAddresses = []string{
-	"kafka1:29091",
-	//"localhost:9091", // Для доступа с хоста
-	//	"localhost:9092",
-	//	"localhost:9093",
+	//"kafka1:29091",
+	"localhost:9091", // Для доступа с хоста
+	"localhost:9092",
+	"localhost:9093",
 }
 
 const (
-	dbDSN        = "host=root-pg-auth-1 port=5432 dbname=auth user=auth-user password=auth-password sslmode=disable"
+	dbDSN        = "host=localhost port=5434 dbname=auth user=auth-user password=auth-password sslmode=disable"
 	grpcPort     = 9000
 	httpPort     = 8000
 	swaggerPort  = 8005
 	grpcAddress  = "localhost:9000"
 	serviceName  = "test-service"
-	redisAddress = "redis:6379"
+	redisAddress = "localhost:6379"
 )
 
 type Servers struct {
